@@ -1,0 +1,16 @@
+[project]
+name = "comfyui-qwen-cinematic-lighting"
+description = "ComfyUI single-node Gemini Lighting Expert with CLIP conditioning and a focused three-light relighting stage."
+version = "3.0.0"
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/kuangrenaigc-stack/ComfyUI-Qwen-Cinematic-Lighting"
+
+[tool.comfy]
+PublisherId = "qwen-cinematic"
+DisplayName = "Gemini Lighting Expert"
+Icon = ""
