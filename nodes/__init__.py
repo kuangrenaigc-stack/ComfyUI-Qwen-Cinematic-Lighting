@@ -3,6 +3,7 @@ from __future__ import annotations
 from comfy_api.latest import ComfyExtension
 from typing_extensions import override
 
+from .preserve import QwenPreserveOriginalRelightingNode
 from .studio import QwenCinematicLightingStudioNode
 
 
@@ -11,6 +12,7 @@ class QwenCinematicLightingExtension(ComfyExtension):
     async def get_node_list(self):
         return [
             QwenCinematicLightingStudioNode,
+            QwenPreserveOriginalRelightingNode,
         ]
 
 

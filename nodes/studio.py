@@ -24,7 +24,10 @@ class QwenCinematicLightingStudioNode(io.ComfyNode):
             node_id=NODE_ID,
             display_name="Gemini Lighting Expert",
             category="qwen/cinematic-lighting",
-            description="Analyzes the source image with Gemini 3 Flash Preview and outputs CLIP conditioning for lighting-only optimization.",
+            description=(
+                "Analyzes the source image with Gemini 3 Flash Preview and outputs CLIP conditioning. "
+                "Use Preserve Original Relighting (Flux Lock) after decoding for strict content preservation."
+            ),
             inputs=[
                 io.Image.Input("image", display_name="Source Image"),
                 io.Clip.Input("clip", display_name="CLIP"),
@@ -53,7 +56,7 @@ class QwenCinematicLightingStudioNode(io.ComfyNode):
                 io.String.Input("aux_lights_json", default="[]", multiline=True, display_name="Three Supporting Lights JSON"),
             ],
             outputs=[
-                io.Image.Output("image", display_name="Image"),
+                io.Image.Output("image", display_name="Reference Image (Unchanged)"),
                 io.Conditioning.Output("positive_conditioning", display_name="Positive Conditioning (CFG)"),
                 io.Conditioning.Output("negative_conditioning", display_name="Negative Conditioning (CFG)"),
                 io.String.Output("positive_prompt", display_name="Positive Prompt"),
@@ -83,7 +86,7 @@ class QwenCinematicLightingStudioNode(io.ComfyNode):
             config,
             expert_result=expert_result,
             lighting_intent=lighting_intent,
-            use_weights=True,
+            use_weights=False,
         )
 
         positive_conditioning = clip.encode_from_tokens_scheduled(clip.tokenize(positive))

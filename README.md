@@ -1,13 +1,15 @@
 # ComfyUI Gemini Lighting Expert
 
-这是一个只针对原图光影优化的单节点工作台。配置 Gemini API Key 后，节点会将输入图像发送给
+这是一个只针对原图光影优化的工作台。配置 Gemini API Key 后，分析节点会将输入图像发送给
 `gemini-3-flash-preview` 进行光影诊断，再把人工灯位控制和专家建议合并为可直接接入采样器的
-CLIP 条件。
+CLIP 条件。对 Flux 编辑结果使用原图锁定节点后，输出的内容、人物与背景细节只来自原图，
+Flux 结果只提供受控的光照变化。
 
 ## 节点
 
 ```text
 qwen/cinematic-lighting/Gemini Lighting Expert
+qwen/cinematic-lighting/Preserve Original Relighting (Flux Lock)
 ```
 
 ## 安装
@@ -26,6 +28,7 @@ git clone https://github.com/kuangrenaigc-stack/ComfyUI-Qwen-Cinematic-Lighting.
 - 接收 `CLIP`，节点内部编码正向和负向提示词。
 - 输出 `Positive Conditioning (CFG)` 与 `Negative Conditioning (CFG)`，直接接入采样器。
 - Gemini 光影专家只优化光线方向、阴影结构、层次分离和环境填充。
+- `Preserve Original Relighting (Flux Lock)` 以原图为内容底板，仅从 Flux 建议图转移平滑光照场。
 - 光位只保留主光、环境漫射/天光补光、主光投影附件，以及 `Fill`、`Rim`、`Back` 三盏辅助灯。
 - 不包含洗图模式、摄影机参数或摄影机相关开关。
 
@@ -35,9 +38,35 @@ git clone https://github.com/kuangrenaigc-stack/ComfyUI-Qwen-Cinematic-Lighting.
 2. 模型加载器的 `CLIP` 输出连接到本节点 `CLIP`。
 3. 本节点 `Positive Conditioning (CFG)` 连接到采样器正向条件。
 4. 本节点 `Negative Conditioning (CFG)` 连接到采样器负向条件。
-5. `Image` 输出继续连接到图生图或预览链路。
+5. `Reference Image (Unchanged)` 输出继续连接到 Flux 的原图参考链路。
 
 提示词、光影元数据和 Gemini 专家报告输出可用于检查分析结果。
+
+## Flux 严格保留原图
+
+Flux 的参考图条件和提示词能够降低内容漂移，但不能单独保证人物和背景完全不被重新生成。
+需要严格保护原图时，请不要直接保存 `VAEDecode` 输出，而是在解码后接入
+`Preserve Original Relighting (Flux Lock)`：
+
+```text
+原图/缩放后的同一参考图 -> Gemini Lighting Expert / Source Image
+原图/缩放后的同一参考图 -> Flux ReferenceLatent 输入链路
+Gemini Positive/Negative Conditioning -> CFGGuider
+VAEDecode IMAGE -> Preserve Original Relighting / Flux Relight Proposal
+原图/缩放后的同一参考图 -> Preserve Original Relighting / Original Image (Content Lock)
+Preserve Original Relighting / Structure-Locked Relight Image -> SaveImage 或 Preview
+```
+
+`Original Image (Content Lock)` 是最终画面的唯一内容来源；节点不把 Flux 生成的人脸、纹理、
+物体或背景像素混入输出，而是把 Flux 的低频照度变化乘回原图。光影优化本来就会改变明暗像素，
+因此这里的“保留”指场景内容和纹理结构不被重绘。
+
+- `Structure Lock Radius` 默认 `64`，数值越大越只保留宽泛、自然的布光变化，保护更严格。
+- `Transfer Low-Frequency Light Color` 默认关闭，以避免材质颜色被模型偏色影响；需要暖光或冷光染色时再开启。
+- 清晰的百叶窗或 Gobo 投影需要降低 `Structure Lock Radius`，这会允许更细的光纹进入输出，应只在原图主体保护可接受时使用。
+
+旧工作流如果仍包含 `QwenCinematicLightingStudioV8Node`，请替换为 `Gemini Lighting Expert`，
+并在保存链路前加入上述 Flux Lock 节点。工作流可能保存 API Key，不应提交到仓库。
 
 ## Gemini 配置
 

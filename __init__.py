@@ -1,6 +1,6 @@
-"""ComfyUI-Qwen-Cinematic-Lighting v3.0
+"""ComfyUI-Qwen-Cinematic-Lighting v3.1
 
-A lighting-only Gemini expert for ComfyUI with CLIP conditioning output.
+A lighting-only Gemini expert with CLIP conditioning and Flux content locking.
 """
 
 from __future__ import annotations

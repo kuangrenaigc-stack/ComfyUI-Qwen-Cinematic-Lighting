@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-qwen-cinematic-lighting"
-description = "ComfyUI single-node Gemini Lighting Expert with CLIP conditioning and a focused three-light relighting stage."
-version = "3.0.0"
+description = "ComfyUI Gemini Lighting Expert with CLIP conditioning and structure-locked Flux relighting output."
+version = "3.1.0"
 license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.10"

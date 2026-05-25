@@ -201,11 +201,11 @@ class PromptCompiler:
 
     def preservation_clauses(self) -> list[PromptClause]:
         return [
-            PromptClause("image-preserving relighting edit only, no content change", 1.30),
-            PromptClause("preserve original subject identity, pose, outfit, composition, and scene layout", 1.26),
-            PromptClause("keep existing background and geometry unchanged", 1.24),
-            PromptClause("apply only physically plausible light direction, shadow shape, illumination and diffuse environmental fill", 1.28),
-            PromptClause("do not add windows, lamps, props, or architectural objects", 1.28),
+            PromptClause("Edit the provided reference photograph by changing illumination only; do not regenerate the image"),
+            PromptClause("Treat all depicted content as immutable: preserve the exact person, face, expression, hair, pose, clothing, and skin texture"),
+            PromptClause("Preserve the exact existing background, objects, edges, text, geometry, framing, viewpoint, and composition"),
+            PromptClause("Apply only physically plausible changes to light intensity, light color, shadow density, shadow direction, and diffuse environmental fill"),
+            PromptClause("Any projected lighting pattern is illumination on existing surfaces only, never a new object or background element"),
         ]
 
     def compile(
@@ -237,11 +237,19 @@ class PromptCompiler:
         positive = ", ".join(text for text in rendered_clauses if text)
 
         negative_parts = [
+            "repainted subject",
+            "reconstructed background",
             "changed identity",
+            "changed face",
+            "changed expression",
+            "changed hair",
+            "changed clothing texture",
             "changed pose",
             "changed composition",
             "changed background",
             "background replacement",
+            "moved existing object",
+            "removed existing object",
             "new architecture",
             "new props",
             "new visible light source",
@@ -268,7 +276,7 @@ class PromptCompiler:
         negative = ", ".join(dict.fromkeys(negative_parts))
         metadata = {
             "schema": "qwen_lighting_expert_v3",
-            "schema_version": "3.0.0",
+            "schema_version": "3.1.0",
             "lighting_intent": intent,
             "config": config.to_dict(),
             "expert": expert_result,
@@ -276,6 +284,8 @@ class PromptCompiler:
                 "weights_enabled": use_weights,
                 "gemini_enriched": bool(expert_result.get("analyzed")),
                 "clause_count": len(clauses),
+                "flux_edit_instruction": True,
+                "requires_pixel_lock_for_strict_preservation": True,
             },
         }
         return positive, negative, dump_state(metadata)
