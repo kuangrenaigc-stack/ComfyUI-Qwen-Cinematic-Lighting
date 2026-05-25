@@ -276,7 +276,7 @@ class PromptCompiler:
         negative = ", ".join(dict.fromkeys(negative_parts))
         metadata = {
             "schema": "qwen_lighting_expert_v3",
-            "schema_version": "3.1.0",
+            "schema_version": "3.2.0",
             "lighting_intent": intent,
             "config": config.to_dict(),
             "expert": expert_result,
@@ -285,7 +285,7 @@ class PromptCompiler:
                 "gemini_enriched": bool(expert_result.get("analyzed")),
                 "clause_count": len(clauses),
                 "flux_edit_instruction": True,
-                "requires_pixel_lock_for_strict_preservation": True,
+                "pixel_lock_integrated": True,
             },
         }
         return positive, negative, dump_state(metadata)

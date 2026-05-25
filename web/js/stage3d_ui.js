@@ -30,9 +30,28 @@ const MODIFIER_LABELS = {
   lattice: "格栅影",
   stained_glass: "彩色效果玻璃",
 };
+const FLUX_SAMPLERS = [
+  "euler", "euler_cfg_pp", "euler_ancestral", "euler_ancestral_cfg_pp", "heun", "heunpp2",
+  "exp_heun_2_x0", "exp_heun_2_x0_sde", "dpm_2", "dpm_2_ancestral", "lms",
+  "dpm_fast", "dpm_adaptive", "dpmpp_2s_ancestral", "dpmpp_2s_ancestral_cfg_pp",
+  "dpmpp_sde", "dpmpp_sde_gpu", "dpmpp_2m", "dpmpp_2m_cfg_pp", "dpmpp_2m_sde",
+  "dpmpp_2m_sde_gpu", "dpmpp_2m_sde_heun", "dpmpp_2m_sde_heun_gpu", "dpmpp_3m_sde",
+  "dpmpp_3m_sde_gpu", "ddpm", "lcm", "ipndm", "ipndm_v", "deis", "res_multistep",
+  "res_multistep_cfg_pp", "res_multistep_ancestral", "res_multistep_ancestral_cfg_pp",
+  "gradient_estimation", "gradient_estimation_cfg_pp", "er_sde", "seeds_2", "seeds_3",
+  "sa_solver", "sa_solver_pece", "ddim", "uni_pc", "uni_pc_bh2",
+];
 const HIDDEN_WIDGETS = new Set([
   "user_prompt",
   "gemini_api_key",
+  "sampler_name",
+  "steps",
+  "noise_seed",
+  "cfg",
+  "lighting_strength",
+  "structure_lock_radius",
+  "max_exposure_stops",
+  "transfer_light_color",
   "world_azimuth",
   "world_elevation",
   "world_distance",
@@ -286,6 +305,26 @@ function createSecretInput(label, getValue, setValue, placeholder = "") {
   return wrap;
 }
 
+function createTextInput(label, getValue, setValue, placeholder = "") {
+  const wrap = document.createElement("label");
+  wrap.className = "qwen-cine-secret";
+  const caption = document.createElement("span");
+  caption.textContent = label;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.spellcheck = false;
+  input.placeholder = placeholder;
+  const sync = () => {
+    if (document.activeElement !== input) input.value = String(getValue() ?? "");
+  };
+  input.addEventListener("change", () => setValue(input.value));
+  input.addEventListener("blur", () => setValue(input.value));
+  wrap.append(caption, input);
+  wrap._sync = sync;
+  sync();
+  return wrap;
+}
+
 function createToggle(label, getValue, setValue) {
   const button = createButton("", () => {
     setValue(!getValue());
@@ -348,6 +387,14 @@ class VirtualLightingStage {
     return {
       userPrompt: String(getWidgetValue(this.node, "user_prompt", "")),
       geminiApiKey: String(getWidgetValue(this.node, "gemini_api_key", "")),
+      samplerName: String(getWidgetValue(this.node, "sampler_name", "euler")),
+      steps: Math.round(clamp(getWidgetValue(this.node, "steps", 4), 1, 100)),
+      noiseSeed: String(getWidgetValue(this.node, "noise_seed", 0)),
+      cfg: clamp(getWidgetValue(this.node, "cfg", 1), 0, 100),
+      lightingStrength: clamp(getWidgetValue(this.node, "lighting_strength", 1), 0, 1),
+      lockRadius: Math.round(clamp(getWidgetValue(this.node, "structure_lock_radius", 64), 4, 256)),
+      maxExposureStops: clamp(getWidgetValue(this.node, "max_exposure_stops", 1.25), 0.1, 4),
+      transferLightColor: parseBoolean(getWidgetValue(this.node, "transfer_light_color", false), false),
       mainModifier: normalizeModifier(getWidgetValue(this.node, "main_modifier", "none")),
       modifierStrength: clamp(getWidgetValue(this.node, "modifier_strength", 0), 0, 1),
       modifierSoftness: clamp(getWidgetValue(this.node, "modifier_softness", 0.35), 0, 1),
@@ -383,6 +430,7 @@ class VirtualLightingStage {
 
   buildControls() {
     const statusPanel = this.root.querySelector("[data-role='status-panel']");
+    const fluxLockPanel = this.root.querySelector("[data-role='flux-lock-panel']");
     const promptPanel = this.root.querySelector("[data-role='prompt-panel']");
     const presetPanel = this.root.querySelector("[data-role='preset-panel']");
     const controlPanel = this.root.querySelector("[data-role='control-panel']");
@@ -390,6 +438,10 @@ class VirtualLightingStage {
     const auxDetailPanel = this.root.querySelector("[data-role='aux-detail-panel']");
 
     statusPanel.appendChild(createButton("恢复推荐尺寸", () => resetNodeToDefaultSize(this.node), "恢复推荐横向工作台尺寸"));
+    const lockStatus = document.createElement("p");
+    lockStatus.className = "qwen-cine-note";
+    lockStatus.textContent = "单节点流程：Gemini 分析 -> Flux 打光 -> 原图结构锁定输出。";
+    statusPanel.appendChild(lockStatus);
 
     const promptControls = [
       createSecretInput("Gemini API Key", () => this.state.geminiApiKey, (value) => {
@@ -404,6 +456,42 @@ class VirtualLightingStage {
       this.syncControls.push(control);
       promptPanel.appendChild(control);
     }
+
+    const fluxLockControls = [
+      createSelect("Flux 采样器", FLUX_SAMPLERS, () => this.state.samplerName, (value) => {
+        setWidgetValue(this.node, "sampler_name", value);
+      }),
+      createRange("采样步数", 1, 100, 1, () => this.state.steps, (value) => {
+        setWidgetValue(this.node, "steps", Math.round(value));
+      }),
+      createRange("CFG", 0, 10, 0.1, () => this.state.cfg, (value) => {
+        setWidgetValue(this.node, "cfg", value);
+      }),
+      createTextInput("随机种子", () => this.state.noiseSeed, (value) => {
+        const parsed = Number(value);
+        setWidgetValue(this.node, "noise_seed", Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0);
+      }, "0"),
+      createRange("光照转移强度", 0, 1, 0.01, () => this.state.lightingStrength, (value) => {
+        setWidgetValue(this.node, "lighting_strength", value);
+      }),
+      createRange("结构锁定半径", 4, 256, 1, () => this.state.lockRadius, (value) => {
+        setWidgetValue(this.node, "structure_lock_radius", Math.round(value));
+      }),
+      createRange("最大曝光改变", 0.1, 4, 0.05, () => this.state.maxExposureStops, (value) => {
+        setWidgetValue(this.node, "max_exposure_stops", value);
+      }, " stops"),
+      createToggle("转移低频色光", () => this.state.transferLightColor, (value) => {
+        setWidgetValue(this.node, "transfer_light_color", value);
+      }),
+    ];
+    for (const control of fluxLockControls) {
+      this.syncControls.push(control);
+      fluxLockPanel.appendChild(control);
+    }
+    const lockNote = document.createElement("p");
+    lockNote.className = "qwen-cine-note";
+    lockNote.textContent = "输出始终以原图细节为底板；锁定半径越高，越不接受 Flux 的细纹理变化。";
+    fluxLockPanel.appendChild(lockNote);
 
     const presets = [
       ["正面柔光", { azimuth: 0, elevation: 25, distance: 6, power: 0.8, softbox: 0.85 }],
@@ -1308,6 +1396,10 @@ function buildRoot() {
         <div class="qwen-cine-section">
           <div class="qwen-cine-title"><span>工作台</span><span>Lighting Only</span></div>
           <div class="qwen-cine-status" data-role="status-panel"></div>
+        </div>
+        <div class="qwen-cine-section">
+          <div class="qwen-cine-title"><span>输出保护</span><span>Flux Lock</span></div>
+          <div data-role="flux-lock-panel"></div>
         </div>
         <div class="qwen-cine-section">
           <div class="qwen-cine-title"><span>主光预设</span><span>Key Presets</span></div>
