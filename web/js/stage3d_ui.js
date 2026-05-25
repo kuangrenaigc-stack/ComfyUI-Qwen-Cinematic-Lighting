@@ -1,6 +1,6 @@
 import { app } from "../../scripts/app.js";
 
-const NODE_CLASS = "GeminiCinematicLightingNode";
+const NODE_CLASSES = new Set(["GeminiCinematicLightingNode", "QwenCinematicLightingWorkbenchNode"]);
 const DEFAULT_PANEL_WIDTH = 1260;
 const DEFAULT_PANEL_HEIGHT = 760;
 const MIN_PANEL_WIDTH = 920;
@@ -1380,7 +1380,7 @@ function buildRoot() {
 app.registerExtension({
   name: "ComfyUI.GeminiCinematicLighting.Stage3D",
   beforeRegisterNodeDef(nodeType, nodeData) {
-    if (nodeData?.name !== NODE_CLASS || nodeType.prototype._geminiCineWorkbenchPatched) return;
+    if (!NODE_CLASSES.has(nodeData?.name) || nodeType.prototype._geminiCineWorkbenchPatched) return;
     nodeType.prototype._geminiCineWorkbenchPatched = true;
 
     const originalOnConfigure = nodeType.prototype.onConfigure;
@@ -1404,7 +1404,7 @@ app.registerExtension({
     };
   },
   async nodeCreated(node) {
-    if (node.comfyClass !== NODE_CLASS && node.constructor?.comfyClass !== NODE_CLASS) return;
+    if (!NODE_CLASSES.has(node.comfyClass) && !NODE_CLASSES.has(node.constructor?.comfyClass)) return;
     if (node._geminiCineStageWidget) return;
 
     node.color = "#38223d";

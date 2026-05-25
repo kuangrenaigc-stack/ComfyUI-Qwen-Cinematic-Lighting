@@ -11,8 +11,8 @@ Flux 结果只提供受控的光照变化。
 gemini/cinematic-lighting/Gemini Lighting Expert
 ```
 
-节点类 ID 为 `GeminiCinematicLightingNode`。旧版本使用 `QwenCinematicLightingWorkbenchNode`，
-工作流需要重新放置一次该节点并重连接口。
+节点类 ID 为 `GeminiCinematicLightingNode`。旧版本使用的
+`QwenCinematicLightingWorkbenchNode` 已作为兼容别名保留，旧工作流可直接打开并继续使用 3D 工作台。
 
 ## 安装
 
@@ -80,8 +80,9 @@ Flux 的参考图条件和提示词能够降低内容漂移，但不能单独保
 - `Transfer Low-Frequency Light Color` 默认关闭，以避免材质颜色被模型偏色影响；需要暖光或冷光染色时再开启。
 - 清晰的百叶窗或 Gobo 投影需要降低 `Structure Lock Radius`，这会允许更细的光纹进入输出，应只在原图主体保护可接受时使用。
 
-旧工作流如果仍包含 `QwenCinematicLightingStudioV8Node` 或 `QwenCinematicLightingWorkbenchNode`，
-请替换为 `GeminiCinematicLightingNode` 并重接外部采样控制节点，直接保存主节点的保护图像输出。
+旧工作流如果仍包含 `QwenCinematicLightingWorkbenchNode` 可直接继续运行；如果仍包含更早的
+`QwenCinematicLightingStudioV8Node`，请替换为 `GeminiCinematicLightingNode` 并重接外部采样控制节点，
+直接保存主节点的保护图像输出。
 工作流可能保存 API Key，不应提交到仓库。
 
 ## Gemini 配置

@@ -17,6 +17,7 @@ from ..engine.prompt_compiler import PromptCompiler
 
 
 NODE_ID = "GeminiCinematicLightingNode"
+LEGACY_NODE_ID = "QwenCinematicLightingWorkbenchNode"
 LOGGER = logging.getLogger(__name__)
 _LUMA_WEIGHTS = (0.2126, 0.7152, 0.0722)
 
@@ -305,3 +306,14 @@ class GeminiCinematicLightingNode(io.ComfyNode):
             protected_image,
             sampled_latent,
         )
+
+
+class LegacyQwenCinematicLightingNode(GeminiCinematicLightingNode):
+    """Compatibility alias for workflows saved before the Gemini rename."""
+
+    @classmethod
+    def define_schema(cls):
+        schema = super().define_schema()
+        schema.node_id = LEGACY_NODE_ID
+        schema.is_deprecated = True
+        return schema

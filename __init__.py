@@ -1,4 +1,4 @@
-"""ComfyUI-Gemini-Cinematic-Lighting v3.6.0
+"""ComfyUI-Gemini-Cinematic-Lighting v3.6.1
 
 A single-node lighting-only Gemini expert with integrated Flux content locking.
 """

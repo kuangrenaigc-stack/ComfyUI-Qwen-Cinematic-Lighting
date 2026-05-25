@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-gemini-cinematic-lighting"
 description = "ComfyUI single-node Gemini Lighting Expert with integrated structure-locked Flux relighting output."
-version = "3.6.0"
+version = "3.6.1"
 license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.10"
