@@ -30,26 +30,9 @@ const MODIFIER_LABELS = {
   lattice: "格栅影",
   stained_glass: "彩色效果玻璃",
 };
-const FLUX_SAMPLERS = [
-  "euler", "euler_cfg_pp", "euler_ancestral", "euler_ancestral_cfg_pp", "heun", "heunpp2",
-  "exp_heun_2_x0", "exp_heun_2_x0_sde", "dpm_2", "dpm_2_ancestral", "lms",
-  "dpm_fast", "dpm_adaptive", "dpmpp_2s_ancestral", "dpmpp_2s_ancestral_cfg_pp",
-  "dpmpp_sde", "dpmpp_sde_gpu", "dpmpp_2m", "dpmpp_2m_cfg_pp", "dpmpp_2m_sde",
-  "dpmpp_2m_sde_gpu", "dpmpp_2m_sde_heun", "dpmpp_2m_sde_heun_gpu", "dpmpp_3m_sde",
-  "dpmpp_3m_sde_gpu", "ddpm", "lcm", "ipndm", "ipndm_v", "deis", "res_multistep",
-  "res_multistep_cfg_pp", "res_multistep_ancestral", "res_multistep_ancestral_cfg_pp",
-  "gradient_estimation", "gradient_estimation_cfg_pp", "er_sde", "seeds_2", "seeds_3",
-  "sa_solver", "sa_solver_pece", "ddim", "uni_pc", "uni_pc_bh2",
-];
-const RESIZE_METHODS = ["nearest-exact", "bilinear", "area", "bicubic", "lanczos"];
 const HIDDEN_WIDGETS = new Set([
   "user_prompt",
   "gemini_api_key",
-  "resize_method",
-  "output_megapixels",
-  "sampler_name",
-  "steps",
-  "noise_seed",
   "cfg",
   "lighting_strength",
   "structure_lock_radius",
@@ -308,26 +291,6 @@ function createSecretInput(label, getValue, setValue, placeholder = "") {
   return wrap;
 }
 
-function createTextInput(label, getValue, setValue, placeholder = "") {
-  const wrap = document.createElement("label");
-  wrap.className = "qwen-cine-secret";
-  const caption = document.createElement("span");
-  caption.textContent = label;
-  const input = document.createElement("input");
-  input.type = "text";
-  input.spellcheck = false;
-  input.placeholder = placeholder;
-  const sync = () => {
-    if (document.activeElement !== input) input.value = String(getValue() ?? "");
-  };
-  input.addEventListener("change", () => setValue(input.value));
-  input.addEventListener("blur", () => setValue(input.value));
-  wrap.append(caption, input);
-  wrap._sync = sync;
-  sync();
-  return wrap;
-}
-
 function createToggle(label, getValue, setValue) {
   const button = createButton("", () => {
     setValue(!getValue());
@@ -390,11 +353,6 @@ class VirtualLightingStage {
     return {
       userPrompt: String(getWidgetValue(this.node, "user_prompt", "")),
       geminiApiKey: String(getWidgetValue(this.node, "gemini_api_key", "")),
-      resizeMethod: String(getWidgetValue(this.node, "resize_method", "nearest-exact")),
-      outputMegapixels: clamp(getWidgetValue(this.node, "output_megapixels", 4), 0.01, 16),
-      samplerName: String(getWidgetValue(this.node, "sampler_name", "euler")),
-      steps: Math.round(clamp(getWidgetValue(this.node, "steps", 4), 1, 100)),
-      noiseSeed: String(getWidgetValue(this.node, "noise_seed", 0)),
       cfg: clamp(getWidgetValue(this.node, "cfg", 1), 0, 100),
       lightingStrength: clamp(getWidgetValue(this.node, "lighting_strength", 1), 0, 1),
       lockRadius: Math.round(clamp(getWidgetValue(this.node, "structure_lock_radius", 64), 4, 256)),
@@ -445,7 +403,7 @@ class VirtualLightingStage {
     statusPanel.appendChild(createButton("恢复推荐尺寸", () => resetNodeToDefaultSize(this.node), "恢复推荐横向工作台尺寸"));
     const lockStatus = document.createElement("p");
     lockStatus.className = "qwen-cine-note";
-    lockStatus.textContent = "单节点流程：Gemini 分析 -> Flux 打光 -> 原图结构锁定输出。";
+    lockStatus.textContent = "外接尺寸/噪声/采样器/Sigmas；节点完成光照条件与原图结构锁定输出。";
     statusPanel.appendChild(lockStatus);
 
     const promptControls = [
@@ -463,25 +421,9 @@ class VirtualLightingStage {
     }
 
     const fluxLockControls = [
-      createSelect("输出缩放算法", RESIZE_METHODS, () => this.state.resizeMethod, (value) => {
-        setWidgetValue(this.node, "resize_method", value);
-      }),
-      createRange("输出分辨率", 0.01, 16, 0.01, () => this.state.outputMegapixels, (value) => {
-        setWidgetValue(this.node, "output_megapixels", value);
-      }, " MP"),
-      createSelect("Flux 采样器", FLUX_SAMPLERS, () => this.state.samplerName, (value) => {
-        setWidgetValue(this.node, "sampler_name", value);
-      }),
-      createRange("采样步数", 1, 100, 1, () => this.state.steps, (value) => {
-        setWidgetValue(this.node, "steps", Math.round(value));
-      }),
       createRange("CFG", 0, 10, 0.1, () => this.state.cfg, (value) => {
         setWidgetValue(this.node, "cfg", value);
       }),
-      createTextInput("随机种子", () => this.state.noiseSeed, (value) => {
-        const parsed = Number(value);
-        setWidgetValue(this.node, "noise_seed", Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0);
-      }, "0"),
       createRange("光照转移强度", 0, 1, 0.01, () => this.state.lightingStrength, (value) => {
         setWidgetValue(this.node, "lighting_strength", value);
       }),
@@ -501,7 +443,7 @@ class VirtualLightingStage {
     }
     const lockNote = document.createElement("p");
     lockNote.className = "qwen-cine-note";
-    lockNote.textContent = "输出分辨率会先缩放原图并作为内容底板；锁定半径越高，越不接受 Flux 的细纹理变化。";
+    lockNote.textContent = "Working Image 是最终内容底板，请由外部缩放节点设置目标尺寸；锁定半径越高，越不接受 Flux 的细纹理变化。";
     fluxLockPanel.appendChild(lockNote);
 
     const presets = [

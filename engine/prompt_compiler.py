@@ -276,7 +276,7 @@ class PromptCompiler:
         negative = ", ".join(dict.fromkeys(negative_parts))
         metadata = {
             "schema": "qwen_lighting_expert_v3",
-            "schema_version": "3.3.0",
+            "schema_version": "3.4.0",
             "lighting_intent": intent,
             "config": config.to_dict(),
             "expert": expert_result,

@@ -5,15 +5,12 @@ from __future__ import annotations
 import json
 import logging
 
-import comfy.model_management
 import comfy.samplers
 import node_helpers
 import torch
 import torch.nn.functional as F
 from comfy_api.latest import io
-from comfy_extras.nodes_custom_sampler import SamplerCustom
-from comfy_extras.nodes_flux import Flux2Scheduler
-from comfy_extras.nodes_post_processing import ImageScaleToTotalPixels
+from comfy_extras.nodes_custom_sampler import SamplerCustomAdvanced
 
 from ..engine.gemini_lighting_expert import analyze_lighting_sync
 from ..engine.lighting_system import LightingConfig, MAIN_MODIFIER_OPTIONS
@@ -115,15 +112,6 @@ def _apply_structure_lock(
     return result.to(dtype=original_image.dtype)
 
 
-def _resize_source_image(image: torch.Tensor, upscale_method: str, megapixels: float) -> torch.Tensor:
-    return ImageScaleToTotalPixels.execute(
-        image,
-        str(upscale_method or "nearest-exact"),
-        max(0.01, min(float(megapixels), 16.0)),
-        1,
-    ).result[0]
-
-
 def _prepare_reference_conditioning(vae, source_image: torch.Tensor, positive_conditioning, negative_conditioning):
     reference_samples = vae.encode(source_image)
     reference_values = {"reference_latents": [reference_samples]}
@@ -133,38 +121,19 @@ def _prepare_reference_conditioning(vae, source_image: torch.Tensor, positive_co
 
 
 def _generate_flux_proposal(
-    model,
     vae,
-    source_image: torch.Tensor,
-    positive_conditioning,
-    negative_conditioning,
-    *,
-    sampler_name: str,
-    steps: int,
-    noise_seed: int,
-    cfg: float,
+    noise,
+    guider,
+    sampler,
+    sigmas,
+    latent_image,
 ) -> torch.Tensor:
-    height = max(16, (int(source_image.shape[1]) // 16) * 16)
-    width = max(16, (int(source_image.shape[2]) // 16) * 16)
-    batch_size = int(source_image.shape[0])
-    initial_latent = {
-        "samples": torch.zeros(
-            [batch_size, 128, height // 16, width // 16],
-            device=comfy.model_management.intermediate_device(),
-        )
-    }
-    sigmas = Flux2Scheduler.execute(max(1, int(steps)), width, height).result[0]
-    sampler = comfy.samplers.sampler_object(str(sampler_name or "euler"))
-    sampled = SamplerCustom.execute(
-        model,
-        True,
-        int(noise_seed),
-        float(cfg),
-        positive_conditioning,
-        negative_conditioning,
+    sampled = SamplerCustomAdvanced.execute(
+        noise,
+        guider,
         sampler,
         sigmas,
-        initial_latent,
+        latent_image,
     ).result[0]
     samples = sampled["samples"]
     if getattr(samples, "is_nested", False):
@@ -181,14 +150,18 @@ class QwenCinematicLightingStudioNode(io.ComfyNode):
             display_name="Gemini Lighting Expert",
             category="qwen/cinematic-lighting",
             description=(
-                "Analyzes the source image, performs Flux relighting internally, and returns a "
-                "structure-locked image whose content is always derived from the original."
+                "Creates reference-conditioned CFG and applies a structure-locked Flux relight using "
+                "external noise, sampler, sigma schedule and latent-size controls."
             ),
             inputs=[
-                io.Image.Input("image", display_name="Source Image"),
+                io.Image.Input("image", display_name="Working Image / Scaled Original"),
                 io.Model.Input("model", display_name="Flux Model"),
                 io.Clip.Input("clip", display_name="CLIP"),
                 io.Vae.Input("vae", display_name="VAE"),
+                io.Noise.Input("noise", display_name="Noise"),
+                io.Sampler.Input("sampler", display_name="Sampler"),
+                io.Sigmas.Input("sigmas", display_name="Sigmas"),
+                io.Latent.Input("latent_image", display_name="Flux2 Empty Latent"),
                 io.String.Input("user_prompt", default="", multiline=True, display_name="Lighting Intent"),
                 io.String.Input(
                     "gemini_api_key",
@@ -196,30 +169,6 @@ class QwenCinematicLightingStudioNode(io.ComfyNode):
                     multiline=False,
                     placeholder="AIza...",
                     display_name="Gemini API Key",
-                ),
-                io.Combo.Input(
-                    "resize_method",
-                    options=ImageScaleToTotalPixels.upscale_methods,
-                    default="nearest-exact",
-                    display_name="Output Resize Method",
-                ),
-                io.Float.Input(
-                    "output_megapixels",
-                    default=4.0,
-                    min=0.01,
-                    max=16.0,
-                    step=0.01,
-                    display_name="Output Resolution (MP)",
-                ),
-                io.Combo.Input("sampler_name", options=comfy.samplers.SAMPLER_NAMES, default="euler", display_name="Flux Sampler"),
-                io.Int.Input("steps", default=4, min=1, max=100, step=1, display_name="Flux Steps"),
-                io.Int.Input(
-                    "noise_seed",
-                    default=0,
-                    min=0,
-                    max=0xFFFFFFFFFFFFFFFF,
-                    control_after_generate=True,
-                    display_name="Flux Seed",
                 ),
                 io.Float.Input("cfg", default=1.0, min=0.0, max=100.0, step=0.1, display_name="Flux CFG"),
                 io.Float.Input(
@@ -282,10 +231,14 @@ class QwenCinematicLightingStudioNode(io.ComfyNode):
         model = kwargs.get("model")
         clip = kwargs.get("clip")
         vae = kwargs.get("vae")
-        if image is None or model is None or clip is None or vae is None:
-            raise RuntimeError("Source Image, Flux Model, CLIP, and VAE inputs are required.")
+        noise = kwargs.get("noise")
+        sampler = kwargs.get("sampler")
+        sigmas = kwargs.get("sigmas")
+        latent_image = kwargs.get("latent_image")
+        if any(value is None for value in (image, model, clip, vae, noise, sampler, sigmas, latent_image)):
+            raise RuntimeError("Working Image, Flux Model, CLIP, VAE, Noise, Sampler, Sigmas and Flux2 Empty Latent are required.")
 
-        LOGGER.info("[Gemini Lighting Expert] Executing integrated Flux relighting with original-image structure lock.")
+        LOGGER.info("[Gemini Lighting Expert] Executing structure-locked Flux relighting with external sampling controls.")
         config = LightingConfig.from_kwargs(**kwargs)
         lighting_intent = str(kwargs.get("user_prompt") or "").strip()
         expert_result = analyze_lighting_sync(
@@ -303,30 +256,25 @@ class QwenCinematicLightingStudioNode(io.ComfyNode):
 
         positive_conditioning = clip.encode_from_tokens_scheduled(clip.tokenize(positive))
         negative_conditioning = clip.encode_from_tokens_scheduled(clip.tokenize(negative))
-        working_image = _resize_source_image(
-            image,
-            str(kwargs.get("resize_method") or "nearest-exact"),
-            float(kwargs.get("output_megapixels", 4.0)),
-        )
         positive_conditioning, negative_conditioning = _prepare_reference_conditioning(
             vae,
-            working_image,
+            image,
             positive_conditioning,
             negative_conditioning,
         )
+        guider = comfy.samplers.CFGGuider(model)
+        guider.set_conds(positive_conditioning, negative_conditioning)
+        guider.set_cfg(float(kwargs.get("cfg", 1.0)))
         flux_proposal = _generate_flux_proposal(
-            model,
             vae,
-            working_image,
-            positive_conditioning,
-            negative_conditioning,
-            sampler_name=str(kwargs.get("sampler_name") or "euler"),
-            steps=int(kwargs.get("steps", 4)),
-            noise_seed=int(kwargs.get("noise_seed", 0)),
-            cfg=float(kwargs.get("cfg", 1.0)),
+            noise,
+            guider,
+            sampler,
+            sigmas,
+            latent_image,
         )
         protected_image = _apply_structure_lock(
-            working_image,
+            image,
             flux_proposal,
             float(kwargs.get("lighting_strength", 1.0)),
             int(kwargs.get("structure_lock_radius", 64)),
@@ -335,12 +283,9 @@ class QwenCinematicLightingStudioNode(io.ComfyNode):
         )
         metadata_data = json.loads(metadata)
         metadata_data["integrated_flux"] = {
-            "resize_method": str(kwargs.get("resize_method") or "nearest-exact"),
-            "output_megapixels": float(kwargs.get("output_megapixels", 4.0)),
-            "output_width": int(working_image.shape[2]),
-            "output_height": int(working_image.shape[1]),
-            "sampler_name": str(kwargs.get("sampler_name") or "euler"),
-            "steps": int(kwargs.get("steps", 4)),
+            "sampling_controls": "external_inputs",
+            "working_width": int(image.shape[2]),
+            "working_height": int(image.shape[1]),
             "cfg": float(kwargs.get("cfg", 1.0)),
             "structure_lock_radius": int(kwargs.get("structure_lock_radius", 64)),
             "lighting_strength": float(kwargs.get("lighting_strength", 1.0)),
