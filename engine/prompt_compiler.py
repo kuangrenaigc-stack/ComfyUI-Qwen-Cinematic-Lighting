@@ -12,7 +12,6 @@ from .cinematic_logic import (
     describe_temperature,
 )
 from .lighting_system import AuxLight, LightingConfig, SkyLight, WorldLight
-from .metadata_schema import dump_state
 
 
 @dataclass(frozen=True)
@@ -190,14 +189,13 @@ class PromptCompiler:
         if not light.enabled:
             return []
         role = AUX_LABELS[index] if index < len(AUX_LABELS) else "supporting light"
-        clauses = [
+        return [
             PromptClause(f"supporting {role}: {describe_azimuth(light.azimuth)}", 1.02 + light.power * 0.06),
             PromptClause(f"{describe_elevation(light.elevation)}, distance {light.distance:.1f}m", 0.98),
             PromptClause(f"{describe_temperature(light.color_temp)}, power {light.power:.2f}", 0.98),
             PromptClause(_softbox_desc(light.softbox), 1.00),
             PromptClause(_beam_desc(light.beam_angle), 0.96),
         ]
-        return clauses
 
     def preservation_clauses(self) -> list[PromptClause]:
         return [
@@ -215,7 +213,7 @@ class PromptCompiler:
         expert_result: dict[str, Any] | None = None,
         lighting_intent: str = "",
         use_weights: bool = True,
-    ) -> tuple[str, str, str]:
+    ) -> tuple[str, str]:
         clauses = self.preservation_clauses()
         intent = _clean_intent(lighting_intent)
         if intent:
@@ -227,10 +225,9 @@ class PromptCompiler:
             clauses.extend(self.compile_aux_light(light, index))
 
         expert_result = expert_result or {}
-        expert_positive = expert_result.get("positive_clauses", [])
         clauses.extend(
             PromptClause(str(text), 1.16, "gemini_expert")
-            for text in expert_positive
+            for text in expert_result.get("positive_clauses", [])
             if str(text).strip()
         )
         rendered_clauses = [clause.render(use_weights) for clause in clauses]
@@ -273,19 +270,5 @@ class PromptCompiler:
             for text in expert_result.get("negative_clauses", [])
             if str(text).strip()
         )
-        negative = ", ".join(dict.fromkeys(negative_parts))
-        metadata = {
-            "schema": "qwen_lighting_expert_v3",
-            "schema_version": "3.4.0",
-            "lighting_intent": intent,
-            "config": config.to_dict(),
-            "expert": expert_result,
-            "compiler": {
-                "weights_enabled": use_weights,
-                "gemini_enriched": bool(expert_result.get("analyzed")),
-                "clause_count": len(clauses),
-                "flux_edit_instruction": True,
-                "pixel_lock_integrated": True,
-            },
-        }
-        return positive, negative, dump_state(metadata)
+        negative = ", ".join(dict.fromkeys(part for part in negative_parts if part))
+        return positive, negative

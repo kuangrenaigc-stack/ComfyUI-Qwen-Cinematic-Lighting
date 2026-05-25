@@ -1,4 +1,4 @@
-"""Lighting-only data model for the Qwen cinematic lighting workbench."""
+"""Lighting-only data model for the Gemini cinematic lighting workbench."""
 
 from __future__ import annotations
 

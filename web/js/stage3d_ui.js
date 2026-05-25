@@ -1,6 +1,6 @@
 import { app } from "../../scripts/app.js";
 
-const NODE_CLASS = "QwenCinematicLightingWorkbenchNode";
+const NODE_CLASS = "GeminiCinematicLightingNode";
 const DEFAULT_PANEL_WIDTH = 1260;
 const DEFAULT_PANEL_HEIGHT = 760;
 const MIN_PANEL_WIDTH = 920;
@@ -126,12 +126,12 @@ function setWidgetValue(node, name, value) {
 function createStorageWidget(widget) {
   const storage = {
     name: widget.name,
-    type: "qwen-cine-storage",
+    type: "gemini-cine-storage",
     value: widget.value,
     options: { ...(widget.options || {}), hidden: true },
     serialize: widget.serialize,
-    _qwenCineStorage: true,
-    _qwenOriginalType: widget.type,
+    _geminiCineStorage: true,
+    _geminiOriginalType: widget.type,
     computeSize: () => [0, -4],
     draw: () => {},
     mouse: () => false,
@@ -192,16 +192,16 @@ function createButton(label, onClick, title = "") {
   button.textContent = label;
   button.title = title;
   button.type = "button";
-  button.className = "qwen-cine-button";
+  button.className = "gemini-cine-button";
   button.addEventListener("click", onClick);
   return button;
 }
 
 function createRange(label, min, max, step, getValue, setValue, suffix = "") {
   const wrap = document.createElement("label");
-  wrap.className = "qwen-cine-range";
+  wrap.className = "gemini-cine-range";
   const top = document.createElement("span");
-  top.className = "qwen-cine-range-top";
+  top.className = "gemini-cine-range-top";
   const caption = document.createElement("span");
   caption.textContent = label;
   const valueText = document.createElement("strong");
@@ -232,7 +232,7 @@ function createRange(label, min, max, step, getValue, setValue, suffix = "") {
 
 function createSelect(label, options, getValue, setValue, labelMap = {}) {
   const wrap = document.createElement("label");
-  wrap.className = "qwen-cine-select";
+  wrap.className = "gemini-cine-select";
   const caption = document.createElement("span");
   caption.textContent = label;
   const select = document.createElement("select");
@@ -254,7 +254,7 @@ function createSelect(label, options, getValue, setValue, labelMap = {}) {
 
 function createTextarea(label, getValue, setValue, placeholder = "") {
   const wrap = document.createElement("label");
-  wrap.className = "qwen-cine-textarea";
+  wrap.className = "gemini-cine-textarea";
   const caption = document.createElement("span");
   caption.textContent = label;
   const textarea = document.createElement("textarea");
@@ -272,7 +272,7 @@ function createTextarea(label, getValue, setValue, placeholder = "") {
 
 function createSecretInput(label, getValue, setValue, placeholder = "") {
   const wrap = document.createElement("label");
-  wrap.className = "qwen-cine-secret";
+  wrap.className = "gemini-cine-secret";
   const caption = document.createElement("span");
   caption.textContent = label;
   const input = document.createElement("input");
@@ -295,7 +295,7 @@ function createToggle(label, getValue, setValue) {
   const button = createButton("", () => {
     setValue(!getValue());
   });
-  button.classList.add("qwen-cine-toggle");
+  button.classList.add("gemini-cine-toggle");
   const sync = () => {
     const enabled = Boolean(getValue());
     button.textContent = `${label}: ${enabled ? "开" : "关"}`;
@@ -315,9 +315,9 @@ function resetNodeToDefaultSize(node) {
   } else {
     node.size = [width, height];
   }
-  node._qwenCineStageWidget?.computeSize?.(DEFAULT_PANEL_WIDTH);
-  node._qwenCineStage?.resize();
-  node._qwenCineStage?.sync();
+  node._geminiCineStageWidget?.computeSize?.(DEFAULT_PANEL_WIDTH);
+  node._geminiCineStage?.resize();
+  node._geminiCineStage?.sync();
   app.graph.setDirtyCanvas(true, true);
 }
 
@@ -380,7 +380,7 @@ class VirtualLightingStage {
     const widgets = this.node.widgets || [];
     for (let index = 0; index < widgets.length; index += 1) {
       const widget = widgets[index];
-      if (!HIDDEN_WIDGETS.has(widget.name) || widget._qwenCineStorage) continue;
+      if (!HIDDEN_WIDGETS.has(widget.name) || widget._geminiCineStorage) continue;
       widgets[index] = createStorageWidget(widget);
     }
   }
@@ -402,8 +402,8 @@ class VirtualLightingStage {
 
     statusPanel.appendChild(createButton("恢复推荐尺寸", () => resetNodeToDefaultSize(this.node), "恢复推荐横向工作台尺寸"));
     const lockStatus = document.createElement("p");
-    lockStatus.className = "qwen-cine-note";
-    lockStatus.textContent = "外接尺寸/噪声/采样器/Sigmas；节点完成光照条件与原图结构锁定输出。";
+    lockStatus.className = "gemini-cine-note";
+    lockStatus.textContent = "外接尺寸/噪声/采样器/Sigmas；输出保护图与可解码的 Raw Flux 潜空间。";
     statusPanel.appendChild(lockStatus);
 
     const promptControls = [
@@ -442,7 +442,7 @@ class VirtualLightingStage {
       fluxLockPanel.appendChild(control);
     }
     const lockNote = document.createElement("p");
-    lockNote.className = "qwen-cine-note";
+    lockNote.className = "gemini-cine-note";
     lockNote.textContent = "Working Image 是最终内容底板，请由外部缩放节点设置目标尺寸；锁定半径越高，越不接受 Flux 的细纹理变化。";
     fluxLockPanel.appendChild(lockNote);
 
@@ -517,7 +517,7 @@ class VirtualLightingStage {
 
     for (const control of this.syncControls) controlPanel.appendChild(control);
     const skyNote = document.createElement("p");
-    skyNote.className = "qwen-cine-note";
+    skyNote.className = "gemini-cine-note";
     skyNote.textContent = "环境漫射模拟天空散射光与场景反射补光：抬起暗部，不产生新硬阴影；关闭估算后可手动设色温。";
     controlPanel.appendChild(skyNote);
 
@@ -558,7 +558,7 @@ class VirtualLightingStage {
       modifierPanel.appendChild(control);
     }
     const modifierNote = document.createElement("p");
-    modifierNote.className = "qwen-cine-note";
+    modifierNote.className = "gemini-cine-note";
     modifierNote.textContent = "真实等效：金属遮片、breakup gobo 或效果玻璃；水纹/彩色只改变照明，不新增物体。";
     modifierPanel.appendChild(modifierNote);
 
@@ -608,14 +608,14 @@ class VirtualLightingStage {
 
   wrapWidgetCallbacks() {
     for (const widget of this.node.widgets || []) {
-      if (widget._qwenStageWrapped) continue;
+      if (widget._geminiStageWrapped) continue;
       const original = widget.callback;
       widget.callback = (...args) => {
         const result = typeof original === "function" ? original.apply(widget, args) : undefined;
         requestAnimationFrame(() => this.sync());
         return result;
       };
-      widget._qwenStageWrapped = true;
+      widget._geminiStageWrapped = true;
     }
   }
 
@@ -1045,11 +1045,11 @@ class VirtualLightingStage {
     this.auxList.innerHTML = "";
     for (let i = 0; i < AUX_LABELS.length; i++) {
       const row = document.createElement("div");
-      row.className = "qwen-aux-row";
+      row.className = "gemini-aux-row";
       const light = normalizeAuxLight(aux[i], i);
       if (i === this.selectedAuxIndex) row.classList.add("selected");
       const swatch = document.createElement("span");
-      swatch.className = "qwen-aux-swatch";
+      swatch.className = "gemini-aux-swatch";
       swatch.style.background = AUX_COLORS[i];
       const label = document.createElement("span");
       label.textContent = `${AUX_LABELS[i]} ${light.enabled ? `${light.azimuth}°` : "off"}`;
@@ -1101,10 +1101,10 @@ function withAlpha(hex, alpha) {
 
 function buildRoot() {
   const root = document.createElement("div");
-  root.className = "qwen-cine-root";
+  root.className = "gemini-cine-root";
   root.innerHTML = `
     <style>
-      .qwen-cine-root {
+      .gemini-cine-root {
         width: 100%;
         height: ${DEFAULT_PANEL_HEIGHT}px !important;
         min-height: ${DEFAULT_PANEL_HEIGHT}px !important;
@@ -1118,7 +1118,7 @@ function buildRoot() {
         overflow: hidden;
         font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
-      .qwen-cine-shell {
+      .gemini-cine-shell {
         display: grid;
         grid-template-columns: minmax(620px, 1fr) minmax(300px, 340px);
         height: 100%;
@@ -1126,7 +1126,7 @@ function buildRoot() {
         min-height: 0;
         overflow: hidden;
       }
-      .qwen-cine-left {
+      .gemini-cine-left {
         display: grid;
         grid-template-rows: minmax(${MIN_STAGE_HEIGHT}px, 1fr) 170px;
         min-width: 0;
@@ -1134,19 +1134,19 @@ function buildRoot() {
         overflow: hidden;
         background: #07070c;
       }
-      .qwen-cine-stage {
+      .gemini-cine-stage {
         position: relative;
         min-width: 0;
         min-height: ${MIN_STAGE_HEIGHT}px;
         overflow: hidden;
         background: radial-gradient(circle at 50% 40%, rgba(74, 48, 96, 0.22), transparent 58%), #07070c;
       }
-      .qwen-cine-stage canvas {
+      .gemini-cine-stage canvas {
         display: block;
         width: 100%;
         height: 100%;
       }
-      .qwen-cine-info {
+      .gemini-cine-info {
         position: absolute;
         left: 12px;
         right: 12px;
@@ -1159,7 +1159,7 @@ function buildRoot() {
         font: 12px ui-monospace, monospace;
         pointer-events: none;
       }
-      .qwen-cine-left-bottom {
+      .gemini-cine-left-bottom {
         display: grid;
         grid-template-columns: 1fr;
         gap: 10px;
@@ -1168,7 +1168,7 @@ function buildRoot() {
         background: linear-gradient(180deg, rgba(12,11,18,0.98), rgba(8,8,12,0.98));
         min-height: 0;
       }
-      .qwen-cine-side {
+      .gemini-cine-side {
         display: flex;
         flex-direction: column;
         gap: 10px;
@@ -1178,17 +1178,17 @@ function buildRoot() {
         min-height: 0;
         overflow: hidden auto;
       }
-      .qwen-cine-section {
+      .gemini-cine-section {
         border: 1px solid rgba(255,255,255,0.1);
         border-radius: 7px;
         background: rgba(255,255,255,0.035);
         padding: 9px;
       }
-      .qwen-cine-left-bottom .qwen-cine-section {
+      .gemini-cine-left-bottom .gemini-cine-section {
         min-height: 0;
         overflow: hidden;
       }
-      .qwen-cine-title {
+      .gemini-cine-title {
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -1197,13 +1197,13 @@ function buildRoot() {
         font-weight: 700;
         margin-bottom: 8px;
       }
-      .qwen-cine-presets,
-      .qwen-cine-status {
+      .gemini-cine-presets,
+      .gemini-cine-status {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 6px;
       }
-      .qwen-cine-button {
+      .gemini-cine-button {
         min-height: 28px;
         color: #e9e7f5;
         background: #1d1b27;
@@ -1212,20 +1212,20 @@ function buildRoot() {
         cursor: pointer;
         font-size: 11px;
       }
-      .qwen-cine-button:hover {
+      .gemini-cine-button:hover {
         background: #2a2637;
         border-color: rgba(244,70,145,0.65);
       }
-      .qwen-cine-toggle[data-enabled="true"] {
+      .gemini-cine-toggle[data-enabled="true"] {
         color: #07110f;
         background: linear-gradient(135deg, #70ffe7, #f2d481);
         border-color: rgba(255,255,255,0.28);
       }
-      .qwen-cine-range {
+      .gemini-cine-range {
         display: block;
         margin: 9px 0;
       }
-      .qwen-cine-range-top {
+      .gemini-cine-range-top {
         display: flex;
         justify-content: space-between;
         gap: 10px;
@@ -1233,24 +1233,24 @@ function buildRoot() {
         font-size: 11px;
         margin-bottom: 4px;
       }
-      .qwen-cine-range strong {
+      .gemini-cine-range strong {
         color: #80fff0;
         font-weight: 700;
       }
-      .qwen-cine-range input {
+      .gemini-cine-range input {
         width: 100%;
         accent-color: #f44691;
       }
-      .qwen-cine-range[data-disabled="true"] {
+      .gemini-cine-range[data-disabled="true"] {
         opacity: 0.45;
       }
-      .qwen-cine-note {
+      .gemini-cine-note {
         margin: 8px 0 0;
         color: rgba(255,255,255,0.50);
         font-size: 10px;
         line-height: 1.45;
       }
-      .qwen-cine-select {
+      .gemini-cine-select {
         display: grid;
         grid-template-columns: 84px 1fr;
         align-items: center;
@@ -1259,7 +1259,7 @@ function buildRoot() {
         font-size: 11px;
         margin: 9px 0;
       }
-      .qwen-cine-select select {
+      .gemini-cine-select select {
         min-width: 0;
         color: #e9e7f5;
         background: #1d1b27;
@@ -1269,7 +1269,7 @@ function buildRoot() {
         box-sizing: border-box;
         padding: 0 8px;
       }
-      .qwen-cine-textarea {
+      .gemini-cine-textarea {
         display: grid;
         grid-template-columns: 72px 1fr;
         gap: 8px;
@@ -1277,7 +1277,7 @@ function buildRoot() {
         font-size: 11px;
         margin: 0 0 8px;
       }
-      .qwen-cine-textarea textarea {
+      .gemini-cine-textarea textarea {
         min-width: 0;
         height: 58px;
         resize: none;
@@ -1289,7 +1289,7 @@ function buildRoot() {
         padding: 7px 8px;
         font: 11px ui-sans-serif, system-ui, sans-serif;
       }
-      .qwen-cine-secret {
+      .gemini-cine-secret {
         display: grid;
         grid-template-columns: 96px 1fr;
         align-items: center;
@@ -1298,7 +1298,7 @@ function buildRoot() {
         font-size: 11px;
         margin: 0 0 8px;
       }
-      .qwen-cine-secret input {
+      .gemini-cine-secret input {
         min-width: 0;
         height: 28px;
         color: #e9e7f5;
@@ -1309,7 +1309,7 @@ function buildRoot() {
         padding: 0 8px;
         font: 11px ui-monospace, monospace;
       }
-      .qwen-aux-row {
+      .gemini-aux-row {
         display: grid;
         grid-template-columns: 12px 1fr 36px;
         align-items: center;
@@ -1321,53 +1321,53 @@ function buildRoot() {
         padding: 0 4px;
         cursor: pointer;
       }
-      .qwen-aux-row.selected {
+      .gemini-aux-row.selected {
         background: rgba(244,70,145,0.18);
         color: #ffffff;
       }
-      .qwen-aux-swatch {
+      .gemini-aux-swatch {
         width: 10px;
         height: 10px;
         border-radius: 50%;
         box-shadow: 0 0 12px currentColor;
       }
     </style>
-    <div class="qwen-cine-shell">
-      <div class="qwen-cine-left">
-        <div class="qwen-cine-stage">
+    <div class="gemini-cine-shell">
+      <div class="gemini-cine-left">
+        <div class="gemini-cine-stage">
           <canvas></canvas>
-          <div class="qwen-cine-info" data-role="stage-info"></div>
+          <div class="gemini-cine-info" data-role="stage-info"></div>
         </div>
-        <div class="qwen-cine-left-bottom">
-          <div class="qwen-cine-section">
-            <div class="qwen-cine-title"><span>光影目标 / 光影专家</span><span>Gemini 3 Flash Preview</span></div>
+        <div class="gemini-cine-left-bottom">
+          <div class="gemini-cine-section">
+            <div class="gemini-cine-title"><span>光影目标 / 光影专家</span><span>Gemini 3 Flash Preview</span></div>
             <div data-role="prompt-panel"></div>
           </div>
         </div>
       </div>
-      <div class="qwen-cine-side">
-        <div class="qwen-cine-section">
-          <div class="qwen-cine-title"><span>工作台</span><span>Lighting Only</span></div>
-          <div class="qwen-cine-status" data-role="status-panel"></div>
+      <div class="gemini-cine-side">
+        <div class="gemini-cine-section">
+          <div class="gemini-cine-title"><span>工作台</span><span>Lighting Only</span></div>
+          <div class="gemini-cine-status" data-role="status-panel"></div>
         </div>
-        <div class="qwen-cine-section">
-          <div class="qwen-cine-title"><span>输出保护</span><span>Flux Lock</span></div>
+        <div class="gemini-cine-section">
+          <div class="gemini-cine-title"><span>输出保护</span><span>Flux Lock</span></div>
           <div data-role="flux-lock-panel"></div>
         </div>
-        <div class="qwen-cine-section">
-          <div class="qwen-cine-title"><span>主光预设</span><span>Key Presets</span></div>
-          <div class="qwen-cine-presets" data-role="preset-panel"></div>
+        <div class="gemini-cine-section">
+          <div class="gemini-cine-title"><span>主光预设</span><span>Key Presets</span></div>
+          <div class="gemini-cine-presets" data-role="preset-panel"></div>
         </div>
-        <div class="qwen-cine-section">
-          <div class="qwen-cine-title"><span>主光控制</span><span>Key</span></div>
+        <div class="gemini-cine-section">
+          <div class="gemini-cine-title"><span>主光控制</span><span>Key</span></div>
           <div data-role="control-panel"></div>
         </div>
-        <div class="qwen-cine-section">
-          <div class="qwen-cine-title"><span>主光投影附件</span><span>Gobo / Projection</span></div>
+        <div class="gemini-cine-section">
+          <div class="gemini-cine-title"><span>主光投影附件</span><span>Gobo / Projection</span></div>
           <div data-role="modifier-panel"></div>
         </div>
-        <div class="qwen-cine-section">
-          <div class="qwen-cine-title"><span>辅助灯层</span><span>3 Lights</span></div>
+        <div class="gemini-cine-section">
+          <div class="gemini-cine-title"><span>辅助灯层</span><span>3 Lights</span></div>
           <div data-role="aux-list" style="margin-top:8px;"></div>
           <div data-role="aux-detail-panel" style="margin-top:8px;"></div>
         </div>
@@ -1378,17 +1378,17 @@ function buildRoot() {
 }
 
 app.registerExtension({
-  name: "ComfyUI.QwenCinematicLighting.Stage3D",
+  name: "ComfyUI.GeminiCinematicLighting.Stage3D",
   beforeRegisterNodeDef(nodeType, nodeData) {
-    if (nodeData?.name !== NODE_CLASS || nodeType.prototype._qwenCineWorkbenchPatched) return;
-    nodeType.prototype._qwenCineWorkbenchPatched = true;
+    if (nodeData?.name !== NODE_CLASS || nodeType.prototype._geminiCineWorkbenchPatched) return;
+    nodeType.prototype._geminiCineWorkbenchPatched = true;
 
     const originalOnConfigure = nodeType.prototype.onConfigure;
     nodeType.prototype.onConfigure = function (...args) {
       const result = originalOnConfigure?.apply(this, args);
       requestAnimationFrame(() => {
-        this._qwenCineStage?.resize();
-        this._qwenCineStage?.sync();
+        this._geminiCineStage?.resize();
+        this._geminiCineStage?.sync();
       });
       return result;
     };
@@ -1397,21 +1397,21 @@ app.registerExtension({
     nodeType.prototype.onAdded = function (...args) {
       const result = originalOnAdded?.apply(this, args);
       requestAnimationFrame(() => {
-        this._qwenCineStage?.resize();
-        this._qwenCineStage?.sync();
+        this._geminiCineStage?.resize();
+        this._geminiCineStage?.sync();
       });
       return result;
     };
   },
   async nodeCreated(node) {
     if (node.comfyClass !== NODE_CLASS && node.constructor?.comfyClass !== NODE_CLASS) return;
-    if (node._qwenCineStageWidget) return;
+    if (node._geminiCineStageWidget) return;
 
     node.color = "#38223d";
     node.bgcolor = "#111018";
 
     const root = buildRoot();
-    const widget = node.addDOMWidget("virtual_lighting_stage", "QWEN_CINEMATIC_STAGE", root, {
+    const widget = node.addDOMWidget("virtual_lighting_stage", "GEMINI_CINEMATIC_STAGE", root, {
       getValue() {
         return "";
       },
@@ -1427,21 +1427,21 @@ app.registerExtension({
       const resolvedWidth = panelWidth(width);
       applyPanelSize(root, resolvedWidth);
       requestAnimationFrame(() => {
-        node._qwenCineStage?.resize();
-        node._qwenCineStage?.render();
+        node._geminiCineStage?.resize();
+        node._geminiCineStage?.render();
       });
       return [resolvedWidth, DEFAULT_PANEL_HEIGHT];
     };
 
-    node._qwenCineStageWidget = widget;
-    node._qwenCineStage = new VirtualLightingStage(node, root);
+    node._geminiCineStageWidget = widget;
+    node._geminiCineStage = new VirtualLightingStage(node, root);
 
     const originalOnResize = node.onResize;
     node.onResize = function (...args) {
       const result = originalOnResize?.apply(this, args);
       requestAnimationFrame(() => {
-        node._qwenCineStageWidget?.computeSize?.(node.size?.[0] ? node.size[0] - 32 : DEFAULT_PANEL_WIDTH);
-        node._qwenCineStage?.sync();
+        node._geminiCineStageWidget?.computeSize?.(node.size?.[0] ? node.size[0] - 32 : DEFAULT_PANEL_WIDTH);
+        node._geminiCineStage?.sync();
       });
       return result;
     };
@@ -1450,25 +1450,25 @@ app.registerExtension({
     node.onConfigure = function (...args) {
       const result = originalOnConfigure?.apply(this, args);
       requestAnimationFrame(() => {
-        node._qwenCineStage?.resize();
-        node._qwenCineStage?.sync();
+        node._geminiCineStage?.resize();
+        node._geminiCineStage?.sync();
       });
       return result;
     };
 
     resetNodeToDefaultSize(node);
     requestAnimationFrame(() => {
-      node._qwenCineStage?.hideNativeLightingWidgets();
-      node._qwenCineStage?.sync();
+      node._geminiCineStage?.hideNativeLightingWidgets();
+      node._geminiCineStage?.sync();
       app.graph.setDirtyCanvas(true, true);
     });
     setTimeout(() => {
-      node._qwenCineStage?.hideNativeLightingWidgets();
-      node._qwenCineStage?.sync();
+      node._geminiCineStage?.hideNativeLightingWidgets();
+      node._geminiCineStage?.sync();
       app.graph.setDirtyCanvas(true, true);
     }, 250);
     setTimeout(() => {
-      node._qwenCineStage?.sync();
+      node._geminiCineStage?.sync();
     }, 1000);
   },
 });

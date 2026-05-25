@@ -3,16 +3,16 @@ from __future__ import annotations
 from comfy_api.latest import ComfyExtension
 from typing_extensions import override
 
-from .studio import QwenCinematicLightingStudioNode
+from .studio import GeminiCinematicLightingNode
 
 
-class QwenCinematicLightingExtension(ComfyExtension):
+class GeminiCinematicLightingExtension(ComfyExtension):
     @override
     async def get_node_list(self):
         return [
-            QwenCinematicLightingStudioNode,
+            GeminiCinematicLightingNode,
         ]
 
 
 async def comfy_entrypoint():
-    return QwenCinematicLightingExtension()
+    return GeminiCinematicLightingExtension()

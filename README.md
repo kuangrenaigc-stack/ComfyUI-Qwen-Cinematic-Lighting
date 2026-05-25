@@ -8,23 +8,26 @@ Flux 结果只提供受控的光照变化。
 ## 节点
 
 ```text
-qwen/cinematic-lighting/Gemini Lighting Expert
+gemini/cinematic-lighting/Gemini Lighting Expert
 ```
+
+节点类 ID 为 `GeminiCinematicLightingNode`。旧版本使用 `QwenCinematicLightingWorkbenchNode`，
+工作流需要重新放置一次该节点并重连接口。
 
 ## 安装
 
 在 ComfyUI 的 `custom_nodes` 目录执行：
 
 ```bash
-git clone https://github.com/kuangrenaigc-stack/ComfyUI-Qwen-Cinematic-Lighting.git
+git clone https://github.com/kuangrenaigc-stack/ComfyUI-Gemini-Cinematic-Lighting.git
 ```
 
 然后重新启动 ComfyUI。
 
 ## 功能
 
-- 输入工作图像、Flux 模型、`CLIP`、`VAE`、噪声、采样器、`SIGMAS` 与 Flux2 空潜图，直接输出保护后的打光成图。
-- 节点内部编码正向与负向 `CFG` 条件，并输出真正的 `CONDITIONING` 数据，而不是提示词字符串。
+- 输入工作图像、Flux 模型、`CLIP`、`VAE`、噪声、采样器、`SIGMAS` 与 Flux2 空潜图，直接输出保护后的打光成图，并可输出原始采样潜空间。
+- 节点内部编码正向与负向 `CFG` 条件，并直接用于内部引导采样，不再暴露会造成回接循环的条件端口。
 - 节点内部保留 `VAEEncode`、`ReferenceLatent`、`CFGGuider`、采样执行、解码和结构锁定；缩放、噪声、采样器、`SIGMAS` 与空潜图保持外部可控接口。
 - Gemini 光影专家只优化光线方向、阴影结构、层次分离和环境填充。
 - 内置 `Flux Lock` 以原图为内容底板，仅从 Flux 建议图转移平滑光照场。
@@ -42,15 +45,15 @@ git clone https://github.com/kuangrenaigc-stack/ComfyUI-Qwen-Cinematic-Lighting.
 7. `Flux2Scheduler` 输出连接到本节点 `Sigmas`。
 8. `EmptyFlux2LatentImage` 输出连接到本节点 `Flux2 Empty Latent`。
 9. 本节点 `Protected Relit Image` 直接连接到 `SaveImage` 或 `PreviewImage`。
+10. 需要查看采样潜空间时，将本节点 `Sampled Latent (Raw Flux)` 连接到外部 `VAEDecode`。
 
 将同一张缩放图像分支连接到 `GetImageSize`，再将宽高输出连接到外部
 `Flux2Scheduler` 与 `EmptyFlux2LatentImage`，即可由外部尺寸链控制输出分辨率。
 
 `ReferenceLatent`、`CFGGuider`、采样执行与 `VAEDecode` 在主节点内部用于生成受保护成图。
-`Positive Conditioning (CFG)` 与 `Negative Conditioning (CFG)` 端口保留，内容已经包含 CLIP 编码和
-工作图像的 Flux 参考潜在，不需要再接 `CLIPTextEncode` 或 `ReferenceLatent`。如果将这两个输出接到
-外部 `CFGGuider` 后另行保存外部解码结果，该结果不会经过本节点的结构锁定。
-光影元数据和 Gemini 专家报告输出可用于检查分析结果。
+Gemini/CLIP 编码的灯光条件已在节点内部连接到 `CFGGuider`，不需要外接 `CLIPTextEncode`、
+`ReferenceLatent` 或 `CFGGuider`，也不会再出现条件输出回接造成的图循环。
+`Sampled Latent (Raw Flux)` 外接解码结果不会经过本节点的结构锁定，不应代替最终保护图输出。
 
 ## Flux 严格保留原图
 
@@ -66,16 +69,20 @@ Flux 的参考图条件和提示词能够降低内容漂移，但不能单独保
 
 `Working Image / Scaled Original` 是最终画面的唯一内容来源；节点不把 Flux 生成的人脸、纹理、
 物体或背景像素混入输出，而是把 Flux 的低频照度变化乘回工作图像。光影优化本来就会改变明暗像素，
-因此这里的“保留”指场景内容和纹理结构不被重绘。
+因此这里的"保留"指场景内容和纹理结构不被重绘。
 
 - 缩放节点继续放在外部：它用于设置输出分辨率，主节点不再擅自调整图片尺寸或结构。
-- `Flux CFG` 仍在工作台内可调；采样器、随机噪声和调度步数由外部节点设置。
+- `Flux CFG` 在工作台内可调；采样器、随机噪声和调度步数由外部节点设置。
+- `Lighting Transfer Strength` 控制 Flux 建议光场转移回原图的比例；设为 `0` 时输出回到原工作图像。
+- `Structure Lock Radius` 决定提取光照变化的空间尺度；数值越高，越不会接收人脸、衣物和背景纹理改变。
+- `Max Exposure Change (Stops)` 限制迁移光场可造成的最大明暗改变，防止出现不自然的过曝或压黑。
 - `Structure Lock Radius` 默认 `64`，数值越大越只保留宽泛、自然的布光变化，保护更严格。
 - `Transfer Low-Frequency Light Color` 默认关闭，以避免材质颜色被模型偏色影响；需要暖光或冷光染色时再开启。
 - 清晰的百叶窗或 Gobo 投影需要降低 `Structure Lock Radius`，这会允许更细的光纹进入输出，应只在原图主体保护可接受时使用。
 
-旧工作流如果仍包含 `QwenCinematicLightingStudioV8Node`，请替换为 `Gemini Lighting Expert`，
-将外部采样控制节点连接到主节点，并直接保存主节点的保护图像输出。工作流可能保存 API Key，不应提交到仓库。
+旧工作流如果仍包含 `QwenCinematicLightingStudioV8Node` 或 `QwenCinematicLightingWorkbenchNode`，
+请替换为 `GeminiCinematicLightingNode` 并重接外部采样控制节点，直接保存主节点的保护图像输出。
+工作流可能保存 API Key，不应提交到仓库。
 
 ## Gemini 配置
 

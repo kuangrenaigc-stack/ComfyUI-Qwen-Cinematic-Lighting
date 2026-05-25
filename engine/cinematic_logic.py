@@ -4,13 +4,16 @@ from __future__ import annotations
 
 
 def clamp(value: float, fallback: float, minimum: float, maximum: float) -> float:
-    """Clamp untrusted numeric UI input, using a fallback for invalid values."""
+    """Clamp untrusted numeric UI input, using a clamped fallback for invalid values."""
+    minimum = float(minimum)
+    maximum = float(maximum)
     try:
         number = float(value)
     except (TypeError, ValueError):
         number = float(fallback)
-
-    return max(float(minimum), min(float(maximum), number))
+    if number != number:  # NaN guard
+        number = float(fallback)
+    return max(minimum, min(maximum, number))
 
 
 def normalize_angle(value: float) -> int:

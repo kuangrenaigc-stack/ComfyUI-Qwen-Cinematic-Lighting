@@ -1,16 +1,17 @@
 [project]
-name = "comfyui-qwen-cinematic-lighting"
+name = "comfyui-gemini-cinematic-lighting"
 description = "ComfyUI single-node Gemini Lighting Expert with integrated structure-locked Flux relighting output."
-version = "3.4.0"
+version = "3.6.0"
 license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.10"
+# Pillow and torch are provided by ComfyUI; no additional runtime dependencies.
 dependencies = []
 
 [project.urls]
-Repository = "https://github.com/kuangrenaigc-stack/ComfyUI-Qwen-Cinematic-Lighting"
+Repository = "https://github.com/kuangrenaigc-stack/ComfyUI-Gemini-Cinematic-Lighting"
 
 [tool.comfy]
-PublisherId = "qwen-cinematic"
+PublisherId = "gemini-cinematic"
 DisplayName = "Gemini Lighting Expert"
 Icon = ""
