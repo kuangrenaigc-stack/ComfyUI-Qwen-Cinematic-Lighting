@@ -2,7 +2,7 @@
 
 这是一个只针对原图光影优化的单节点工作台。配置 Gemini API Key 后，节点会将输入图像发送给
 `gemini-3-flash-preview` 进行光影诊断，再把人工灯位控制和专家建议合并为可直接接入采样器的
-CLIP 条件，在节点内部执行 Flux 编辑与原图结构锁定。最终输出的内容、人物与背景细节只来自原图，
+CLIP 条件，在节点内部执行分辨率调整、参考潜在、Flux 编辑与原图结构锁定。最终输出的内容、人物与背景细节只来自缩放后的原图，
 Flux 结果只提供受控的光照变化。
 
 ## 节点
@@ -24,7 +24,8 @@ git clone https://github.com/kuangrenaigc-stack/ComfyUI-Qwen-Cinematic-Lighting.
 ## 功能
 
 - 输入原图、Flux 模型、`CLIP` 和 `VAE`，直接输出保护后的打光成图。
-- 节点内部编码正向与负向 `CFG` 条件，并内部完成 Flux 采样和解码。
+- 节点内部编码正向与负向 `CFG` 条件，并输出真正的 `CONDITIONING` 数据，而不是提示词字符串。
+- 内部集成 `Scale Image to Total Pixels`、`VAEEncode`、`ReferenceLatent`、`CFGGuider`、Flux2 调度、空潜图、采样和解码。
 - Gemini 光影专家只优化光线方向、阴影结构、层次分离和环境填充。
 - 内置 `Flux Lock` 以原图为内容底板，仅从 Flux 建议图转移平滑光照场。
 - 光位只保留主光、环境漫射/天光补光、主光投影附件，以及 `Fill`、`Rim`、`Back` 三盏辅助灯。
@@ -39,7 +40,10 @@ git clone https://github.com/kuangrenaigc-stack/ComfyUI-Qwen-Cinematic-Lighting.
 5. 本节点 `Protected Relit Image` 直接连接到 `SaveImage` 或 `PreviewImage`。
 
 `ReferenceLatent`、`CFGGuider`、`SamplerCustomAdvanced` 与 `VAEDecode` 已经在主节点内部完成，
-无需在该插件之外重复连接。提示词、光影元数据和 Gemini 专家报告输出可用于检查分析结果。
+无需在该插件之外重复连接。`Positive Conditioning (CFG)` 与 `Negative Conditioning (CFG)`
+也作为端口保留，内容已经包含 CLIP 编码和缩放原图的 Flux 参考潜在，可直接接外部 `CFGGuider`
+用于调试或兼容流程，不需要再接 `CLIPTextEncode` 或 `ReferenceLatent`。
+光影元数据和 Gemini 专家报告输出可用于检查分析结果。
 
 ## Flux 严格保留原图
 
@@ -53,10 +57,11 @@ Flux 的参考图条件和提示词能够降低内容漂移，但不能单独保
     -> Protected Relit Image
 ```
 
-`Source Image` 是最终画面的唯一内容来源；节点不把 Flux 生成的人脸、纹理、
-物体或背景像素混入输出，而是把 Flux 的低频照度变化乘回原图。光影优化本来就会改变明暗像素，
+`Source Image` 经内部输出尺寸缩放后，是最终画面的唯一内容来源；节点不把 Flux 生成的人脸、纹理、
+物体或背景像素混入输出，而是把 Flux 的低频照度变化乘回缩放后的原图。光影优化本来就会改变明暗像素，
 因此这里的“保留”指场景内容和纹理结构不被重绘。
 
+- `Output Resolution (MP)` 默认 `4.00`，对应原工作流的缩放图像节点，用于设置最终输出分辨率；`Output Resize Method` 默认 `nearest-exact`。
 - `Flux Steps`、`Flux CFG` 与采样器的默认值对应原工作流的 `4 / 1 / euler`。
 - `Structure Lock Radius` 默认 `64`，数值越大越只保留宽泛、自然的布光变化，保护更严格。
 - `Transfer Low-Frequency Light Color` 默认关闭，以避免材质颜色被模型偏色影响；需要暖光或冷光染色时再开启。

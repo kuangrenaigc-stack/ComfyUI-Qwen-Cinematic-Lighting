@@ -13,6 +13,7 @@ import torch.nn.functional as F
 from comfy_api.latest import io
 from comfy_extras.nodes_custom_sampler import SamplerCustom
 from comfy_extras.nodes_flux import Flux2Scheduler
+from comfy_extras.nodes_post_processing import ImageScaleToTotalPixels
 
 from ..engine.gemini_lighting_expert import analyze_lighting_sync
 from ..engine.lighting_system import LightingConfig, MAIN_MODIFIER_OPTIONS
@@ -114,6 +115,23 @@ def _apply_structure_lock(
     return result.to(dtype=original_image.dtype)
 
 
+def _resize_source_image(image: torch.Tensor, upscale_method: str, megapixels: float) -> torch.Tensor:
+    return ImageScaleToTotalPixels.execute(
+        image,
+        str(upscale_method or "nearest-exact"),
+        max(0.01, min(float(megapixels), 16.0)),
+        1,
+    ).result[0]
+
+
+def _prepare_reference_conditioning(vae, source_image: torch.Tensor, positive_conditioning, negative_conditioning):
+    reference_samples = vae.encode(source_image)
+    reference_values = {"reference_latents": [reference_samples]}
+    positive = node_helpers.conditioning_set_values(positive_conditioning, reference_values, append=True)
+    negative = node_helpers.conditioning_set_values(negative_conditioning, reference_values, append=True)
+    return positive, negative
+
+
 def _generate_flux_proposal(
     model,
     vae,
@@ -126,10 +144,6 @@ def _generate_flux_proposal(
     noise_seed: int,
     cfg: float,
 ) -> torch.Tensor:
-    reference_samples = vae.encode(source_image)
-    reference_values = {"reference_latents": [reference_samples]}
-    positive = node_helpers.conditioning_set_values(positive_conditioning, reference_values, append=True)
-    negative = node_helpers.conditioning_set_values(negative_conditioning, reference_values, append=True)
     height = max(16, (int(source_image.shape[1]) // 16) * 16)
     width = max(16, (int(source_image.shape[2]) // 16) * 16)
     batch_size = int(source_image.shape[0])
@@ -146,8 +160,8 @@ def _generate_flux_proposal(
         True,
         int(noise_seed),
         float(cfg),
-        positive,
-        negative,
+        positive_conditioning,
+        negative_conditioning,
         sampler,
         sigmas,
         initial_latent,
@@ -182,6 +196,20 @@ class QwenCinematicLightingStudioNode(io.ComfyNode):
                     multiline=False,
                     placeholder="AIza...",
                     display_name="Gemini API Key",
+                ),
+                io.Combo.Input(
+                    "resize_method",
+                    options=ImageScaleToTotalPixels.upscale_methods,
+                    default="nearest-exact",
+                    display_name="Output Resize Method",
+                ),
+                io.Float.Input(
+                    "output_megapixels",
+                    default=4.0,
+                    min=0.01,
+                    max=16.0,
+                    step=0.01,
+                    display_name="Output Resolution (MP)",
                 ),
                 io.Combo.Input("sampler_name", options=comfy.samplers.SAMPLER_NAMES, default="euler", display_name="Flux Sampler"),
                 io.Int.Input("steps", default=4, min=1, max=100, step=1, display_name="Flux Steps"),
@@ -241,8 +269,8 @@ class QwenCinematicLightingStudioNode(io.ComfyNode):
             ],
             outputs=[
                 io.Image.Output("image", display_name="Protected Relit Image"),
-                io.String.Output("positive_prompt", display_name="Positive Prompt"),
-                io.String.Output("negative_prompt", display_name="Negative Prompt"),
+                io.Conditioning.Output("positive_conditioning", display_name="Positive Conditioning (CFG)"),
+                io.Conditioning.Output("negative_conditioning", display_name="Negative Conditioning (CFG)"),
                 io.String.Output("lighting_metadata_json", display_name="Lighting Metadata JSON"),
                 io.String.Output("expert_report_json", display_name="Gemini Expert Report JSON"),
             ],
@@ -275,10 +303,21 @@ class QwenCinematicLightingStudioNode(io.ComfyNode):
 
         positive_conditioning = clip.encode_from_tokens_scheduled(clip.tokenize(positive))
         negative_conditioning = clip.encode_from_tokens_scheduled(clip.tokenize(negative))
+        working_image = _resize_source_image(
+            image,
+            str(kwargs.get("resize_method") or "nearest-exact"),
+            float(kwargs.get("output_megapixels", 4.0)),
+        )
+        positive_conditioning, negative_conditioning = _prepare_reference_conditioning(
+            vae,
+            working_image,
+            positive_conditioning,
+            negative_conditioning,
+        )
         flux_proposal = _generate_flux_proposal(
             model,
             vae,
-            image,
+            working_image,
             positive_conditioning,
             negative_conditioning,
             sampler_name=str(kwargs.get("sampler_name") or "euler"),
@@ -287,7 +326,7 @@ class QwenCinematicLightingStudioNode(io.ComfyNode):
             cfg=float(kwargs.get("cfg", 1.0)),
         )
         protected_image = _apply_structure_lock(
-            image,
+            working_image,
             flux_proposal,
             float(kwargs.get("lighting_strength", 1.0)),
             int(kwargs.get("structure_lock_radius", 64)),
@@ -296,6 +335,10 @@ class QwenCinematicLightingStudioNode(io.ComfyNode):
         )
         metadata_data = json.loads(metadata)
         metadata_data["integrated_flux"] = {
+            "resize_method": str(kwargs.get("resize_method") or "nearest-exact"),
+            "output_megapixels": float(kwargs.get("output_megapixels", 4.0)),
+            "output_width": int(working_image.shape[2]),
+            "output_height": int(working_image.shape[1]),
             "sampler_name": str(kwargs.get("sampler_name") or "euler"),
             "steps": int(kwargs.get("steps", 4)),
             "cfg": float(kwargs.get("cfg", 1.0)),
@@ -311,8 +354,8 @@ class QwenCinematicLightingStudioNode(io.ComfyNode):
         )
         return io.NodeOutput(
             protected_image,
-            positive,
-            negative,
+            positive_conditioning,
+            negative_conditioning,
             metadata,
             json.dumps(expert_result, ensure_ascii=False, sort_keys=True),
         )

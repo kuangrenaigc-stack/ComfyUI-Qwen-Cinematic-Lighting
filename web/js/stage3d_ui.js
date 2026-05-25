@@ -41,9 +41,12 @@ const FLUX_SAMPLERS = [
   "gradient_estimation", "gradient_estimation_cfg_pp", "er_sde", "seeds_2", "seeds_3",
   "sa_solver", "sa_solver_pece", "ddim", "uni_pc", "uni_pc_bh2",
 ];
+const RESIZE_METHODS = ["nearest-exact", "bilinear", "area", "bicubic", "lanczos"];
 const HIDDEN_WIDGETS = new Set([
   "user_prompt",
   "gemini_api_key",
+  "resize_method",
+  "output_megapixels",
   "sampler_name",
   "steps",
   "noise_seed",
@@ -387,6 +390,8 @@ class VirtualLightingStage {
     return {
       userPrompt: String(getWidgetValue(this.node, "user_prompt", "")),
       geminiApiKey: String(getWidgetValue(this.node, "gemini_api_key", "")),
+      resizeMethod: String(getWidgetValue(this.node, "resize_method", "nearest-exact")),
+      outputMegapixels: clamp(getWidgetValue(this.node, "output_megapixels", 4), 0.01, 16),
       samplerName: String(getWidgetValue(this.node, "sampler_name", "euler")),
       steps: Math.round(clamp(getWidgetValue(this.node, "steps", 4), 1, 100)),
       noiseSeed: String(getWidgetValue(this.node, "noise_seed", 0)),
@@ -458,6 +463,12 @@ class VirtualLightingStage {
     }
 
     const fluxLockControls = [
+      createSelect("输出缩放算法", RESIZE_METHODS, () => this.state.resizeMethod, (value) => {
+        setWidgetValue(this.node, "resize_method", value);
+      }),
+      createRange("输出分辨率", 0.01, 16, 0.01, () => this.state.outputMegapixels, (value) => {
+        setWidgetValue(this.node, "output_megapixels", value);
+      }, " MP"),
       createSelect("Flux 采样器", FLUX_SAMPLERS, () => this.state.samplerName, (value) => {
         setWidgetValue(this.node, "sampler_name", value);
       }),
@@ -490,7 +501,7 @@ class VirtualLightingStage {
     }
     const lockNote = document.createElement("p");
     lockNote.className = "qwen-cine-note";
-    lockNote.textContent = "输出始终以原图细节为底板；锁定半径越高，越不接受 Flux 的细纹理变化。";
+    lockNote.textContent = "输出分辨率会先缩放原图并作为内容底板；锁定半径越高，越不接受 Flux 的细纹理变化。";
     fluxLockPanel.appendChild(lockNote);
 
     const presets = [
